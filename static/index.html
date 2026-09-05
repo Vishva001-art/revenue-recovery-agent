@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Revenue Recovery Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B1220;
+    --ink-2:#131C2E;
+    --paper:#F6F4EC;
+    --line: rgba(246,244,236,0.10);
+    --line-strong: rgba(246,244,236,0.18);
+    --muted:#8B93A7;
+    --signal:#3DDC97;      /* recovered */
+    --amber:#F0AC4E;       /* pending / at-risk */
+    --coral:#E8636B;       /* failed / escalated */
+    --blue:#6C8CFF;        /* retry / info */
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+  .display{ font-family:'Space Grotesk', sans-serif; }
+
+  header.top{
+    padding: 28px 40px 20px;
+    border-bottom: 1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:flex-end;
+    position:sticky; top:0; background: var(--ink); z-index:10;
+  }
+  .brand{ display:flex; flex-direction:column; gap:4px;}
+  .brand .eyebrow{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--signal); font-family:'IBM Plex Mono',monospace;}
+  .brand h1{ font-family:'Space Grotesk',sans-serif; font-size:22px; margin:0; font-weight:600; letter-spacing:-0.01em;}
+  .top-actions{ display:flex; gap:10px; align-items:center;}
+
+  button{
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:13px; font-weight:600;
+    border-radius: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--paper);
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  button.primary{ background: var(--signal); color:#08130E; border-color:var(--signal);}
+  button.primary:hover{ filter:brightness(1.08); }
+  button:hover{ border-color: var(--paper); }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+
+  main{ padding: 28px 40px 60px; max-width:1280px; margin:0 auto;}
+
+  .ledger-strip{
+    display:grid;
+    grid-template-columns: 1.3fr repeat(4, 1fr);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    overflow:hidden;
+    margin-bottom: 28px;
+  }
+  .ledger-cell{
+    padding: 20px 22px;
+    border-right: 1px solid var(--line);
+    background: var(--ink-2);
+  }
+  .ledger-cell:last-child{ border-right:none; }
+  .ledger-cell .label{ font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin-bottom:10px; font-family:'IBM Plex Mono',monospace;}
+  .ledger-cell .value{ font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:600; }
+  .ledger-cell.hero .value{ color:var(--signal); font-size:32px; }
+  .ledger-cell .sub{ font-size:12px; color:var(--muted); margin-top:6px; }
+
+  .panel{
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--ink-2);
+    margin-bottom: 24px;
+    overflow:hidden;
+  }
+  .panel-head{
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .panel-head h2{ font-family:'Space Grotesk',sans-serif; font-size:15px; margin:0; font-weight:600;}
+  .panel-head .hint{ font-size:12px; color:var(--muted); }
+
+  .breakdown-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:0; }
+  .breakdown-grid .col{ padding: 16px 20px; }
+  .breakdown-grid .col:first-child{ border-right:1px solid var(--line); }
+  .bar-row{ display:flex; align-items:center; gap:10px; font-size:13px; margin-bottom:10px; }
+  .bar-row .bar-label{ width:150px; flex-shrink:0; color:var(--muted); text-transform:capitalize;}
+  .bar-track{ flex:1; height:6px; background: rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; }
+  .bar-fill{ height:100%; background: var(--blue); border-radius:4px; }
+  .bar-count{ width:28px; text-align:right; font-family:'IBM Plex Mono',monospace; color:var(--paper); }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{
+    text-align:left; padding: 10px 20px; font-size:11px; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--muted); border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace; font-weight:500;
+  }
+  tbody td{ padding: 12px 20px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tbody tr{ cursor:pointer; transition: background .12s ease; }
+  tbody tr:hover{ background: rgba(255,255,255,0.03); }
+  td.amount{ font-family:'IBM Plex Mono',monospace; text-align:right; }
+  td.txnid{ font-family:'IBM Plex Mono',monospace; color: var(--muted); }
+
+  .pill{
+    display:inline-block; padding: 3px 10px; border-radius: 20px; font-size:11px;
+    font-weight:600; text-transform:capitalize; font-family:'IBM Plex Mono',monospace;
+    border:1px solid transparent;
+  }
+  .pill.success{ background: rgba(61,220,151,0.12); color: var(--signal); border-color: rgba(61,220,151,0.3);}
+  .pill.recovered{ background: rgba(61,220,151,0.12); color: var(--signal); border-color: rgba(61,220,151,0.3);}
+  .pill.failed{ background: rgba(232,99,107,0.12); color: var(--coral); border-color: rgba(232,99,107,0.3);}
+  .pill.escalated{ background: rgba(232,99,107,0.12); color: var(--coral); border-color: rgba(232,99,107,0.3);}
+  .pill.pending{ background: rgba(240,172,78,0.12); color: var(--amber); border-color: rgba(240,172,78,0.3);}
+
+  .table-controls{ padding: 12px 20px; display:flex; gap:8px; border-bottom:1px solid var(--line); }
+  .table-controls button{ padding: 6px 12px; font-size:12px; }
+  .table-controls button.active{ background: var(--paper); color:var(--ink); border-color:var(--paper); }
+
+  /* Audit trail drawer */
+  .drawer-backdrop{
+    position:fixed; inset:0; background: rgba(0,0,0,0.55);
+    display:none; align-items:flex-start; justify-content:flex-end; z-index:100;
+  }
+  .drawer-backdrop.open{ display:flex; }
+  .drawer{
+    width: 460px; max-width:92vw; height:100%; background: var(--ink-2);
+    border-left: 1px solid var(--line-strong); overflow-y:auto;
+    padding: 24px;
+  }
+  .drawer h3{ font-family:'Space Grotesk',sans-serif; margin:0 0 4px; font-size:18px;}
+  .drawer .close{ float:right; }
+  .trail-item{
+    border-left: 2px solid var(--line-strong);
+    padding: 4px 0 16px 16px; margin-left:6px; position:relative;
+  }
+  .trail-item::before{
+    content:''; position:absolute; left:-5px; top:4px; width:8px; height:8px;
+    border-radius:50%; background: var(--blue);
+  }
+  .trail-item .step-label{ font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase; color: var(--blue); letter-spacing:.06em;}
+  .trail-item .step-detail{ font-size:13px; margin-top:4px; line-height:1.5; }
+  .trail-item .step-time{ font-size:11px; color:var(--muted); margin-top:4px; font-family:'IBM Plex Mono',monospace;}
+
+  .status-banner{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background: var(--signal); color:#08130E; padding:12px 22px; border-radius:8px;
+    font-size:13px; font-weight:600; display:none; z-index:200; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .status-banner.show{ display:block; }
+  .empty-hint{ padding: 30px 20px; color:var(--muted); font-size:13px; text-align:center;}
+
+  .customer-link{ color: var(--blue); text-decoration: underline; text-underline-offset:2px; cursor:pointer; }
+  .customer-link:hover{ color: var(--paper); }
+
+  .profile-stats{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin-top:14px; }
+  .stat-chip{
+    border:1px solid var(--line-strong); border-radius:8px; padding:10px 8px; text-align:center;
+    cursor:pointer; background: rgba(255,255,255,0.02); transition: all .12s ease;
+  }
+  .stat-chip:hover{ border-color: var(--paper); }
+  .stat-chip.active{ background: var(--paper); border-color: var(--paper); }
+  .stat-chip.active .lbl{ color: var(--ink); }
+  .stat-chip.active .num{ color: var(--ink); }
+  .stat-chip .num{ font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:600; }
+  .stat-chip .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-top:3px; }
+  .recovery-callout{ margin-bottom:18px; }
+
+  .intel-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;}
+  .intel-card{border:1px solid var(--line);background:rgba(255,255,255,.02);border-radius:10px;padding:16px;}
+  .intel-title{font-size:14px;font-weight:600;margin-bottom:6px;}
+  .intel-value{font-family:'IBM Plex Mono',monospace;font-size:24px;margin:8px 0;}
+  .intel-sub{font-size:12px;color:var(--muted);line-height:1.5;}
+  .prob-bar{height:8px;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden;margin:10px 0 6px;}
+  .prob-fill{height:100%;background:var(--blue);border-radius:99px;}
+  .intel-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .intel-table th,.intel-table td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left;}
+  .intel-table th{color:var(--muted);font-weight:500;}
+  .segment{font-size:10px;text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--line);padding:3px 6px;border-radius:999px;}
+  @media(max-width:850px){.intel-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="eyebrow">AI Revenue Recovery Agent</span>
+    <h1>Recovery Ledger</h1>
+  </div>
+  <div class="top-actions">
+    <button id="refreshBtn">Refresh</button>
+    <button id="recoverAllBtn" class="primary">Recover all eligible</button>
+  </div>
+</header>
+
+<main>
+  <section class="ledger-strip" id="metricsStrip">
+    <div class="ledger-cell hero">
+      <div class="label">Total recovered</div>
+      <div class="value mono" id="m-recovered">₹0</div>
+      <div class="sub" id="m-recovered-sub">—</div>
+    </div>
+    <div class="ledger-cell">
+      <div class="label">Total transactions</div>
+      <div class="value mono" id="m-total">0</div>
+    </div>
+    <div class="ledger-cell">
+      <div class="label">Failed</div>
+      <div class="value mono" id="m-failed" style="color:var(--coral)">0</div>
+    </div>
+    <div class="ledger-cell">
+      <div class="label">Pending</div>
+      <div class="value mono" id="m-pending" style="color:var(--amber)">0</div>
+    </div>
+    <div class="ledger-cell">
+      <div class="label">Recovered count</div>
+      <div class="value mono" id="m-recovered-count" style="color:var(--signal)">0</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Recovery Intelligence</h2>
+      <span class="hint">customer context + expected recoverable value</span>
+    </div>
+    <div class="intel-grid">
+      <div class="intel-card" id="topOpportunityCard">
+        <div class="hint">Top recovery opportunity</div>
+        <div class="intel-title" id="intel-txn">—</div>
+        <div class="intel-value" id="intel-expected">₹0</div>
+        <div class="intel-sub" id="intel-detail">Loading agent decision signals…</div>
+        <div class="prob-bar"><div class="prob-fill" id="intel-prob-fill" style="width:0%"></div></div>
+        <div class="intel-sub"><span id="intel-prob">0%</span> recovery probability</div>
+      </div>
+      <div class="intel-card">
+        <div class="hint">Highest-value opportunities</div>
+        <table class="intel-table">
+          <thead><tr><th>Txn</th><th>Amount</th><th>Probability</th><th>Expected</th></tr></thead>
+          <tbody id="intel-opps"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Breakdown</h2>
+      <span class="hint">by failure reason and intervention used</span>
+    </div>
+    <div class="breakdown-grid">
+      <div class="col">
+        <div class="hint" style="margin-bottom:12px;">Failure reason</div>
+        <div id="failureBreakdown"></div>
+      </div>
+      <div class="col">
+        <div class="hint" style="margin-bottom:12px;">Intervention type</div>
+        <div id="interventionBreakdown"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Transactions</h2>
+      <span class="hint" id="txnCountHint">— rows</span>
+    </div>
+    <div class="table-controls" id="filterControls">
+      <button data-filter="" class="active">All</button>
+      <button data-filter="failed">Failed</button>
+      <button data-filter="pending">Pending</button>
+      <button data-filter="recovered">Recovered</button>
+      <button data-filter="escalated">Escalated</button>
+      <button data-filter="success">Success</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Transaction</th>
+          <th>Customer</th>
+          <th>Merchant</th>
+          <th>Method</th>
+          <th>Status</th>
+          <th>Failure reason</th>
+          <th style="text-align:right;">Amount</th>
+        </tr>
+      </thead>
+      <tbody id="txnTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="emptyHint" style="display:none;">No transactions match this filter.</div>
+  </section>
+</main>
+
+<div class="drawer-backdrop" id="drawerBackdrop">
+  <div class="drawer">
+    <button class="close" id="closeDrawer">✕</button>
+    <h3 id="drawerTitle">txn_00000</h3>
+    <div class="hint" id="drawerSub" style="margin-bottom:20px; color:var(--muted); font-size:12px;"></div>
+    <div id="drawerContent"></div>
+  </div>
+</div>
+
+<div class="drawer-backdrop" id="profileBackdrop">
+  <div class="drawer">
+    <button class="close" id="closeProfile">✕</button>
+    <h3 id="profileTitle">customer</h3>
+    <div class="hint" id="profileSub" style="margin-bottom:4px; color:var(--muted); font-size:12px;"></div>
+    <div class="profile-stats" id="profileStats"></div>
+    <div class="hint" style="margin:20px 0 8px;">Transactions <span id="profileFilterLabel"></span></div>
+    <table class="intel-table">
+      <thead><tr><th>Txn</th><th>Status</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody id="profileTxnBody"></tbody>
+    </table>
+    <div class="empty-hint" id="profileEmptyHint" style="display:none;">No transactions in this bucket.</div>
+  </div>
+</div>
+
+<div class="status-banner" id="statusBanner"></div>
+
+<script>
+const API = "";
+
+function fmtCurrency(n){
+  return "₹" + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0});
+}
+
+function pillHtml(status){
+  return `<span class="pill ${status}">${status}</span>`;
+}
+
+let currentFilter = "";
+let allTransactions = [];
+
+async function loadDashboard(){
+  const res = await fetch(API + "/dashboard");
+  const d = await res.json();
+  document.getElementById("m-recovered").textContent = fmtCurrency(d.total_money_recovered);
+  document.getElementById("m-recovered-sub").textContent =
+    `${d.recovered_count} transaction${d.recovered_count===1?'':'s'} recovered so far`;
+  document.getElementById("m-total").textContent = d.total_transactions;
+  document.getElementById("m-failed").textContent = d.failed_count;
+  document.getElementById("m-pending").textContent = d.pending_count;
+  document.getElementById("m-recovered-count").textContent = d.recovered_count;
+
+  renderBreakdown("failureBreakdown", d.failure_breakdown);
+  renderBreakdown("interventionBreakdown", d.intervention_breakdown);
+  await loadRecoveryIntelligence();
+}
+
+async function loadRecoveryIntelligence(){
+  const res = await fetch(API + "/recovery-opportunities");
+  const d = await res.json();
+  const opps = d.opportunities || [];
+  const top = opps[0];
+  if(!top){
+    document.getElementById("intel-txn").textContent = "No eligible opportunities";
+    document.getElementById("intel-detail").textContent = "Run the transaction generator or wait for eligible failed/abandoned payments.";
+    return;
+  }
+  const profile = top.customer_profile || {};
+  const probability = Number(top.recovery_probability || 0);
+  document.getElementById("intel-txn").innerHTML =
+    `${top.transaction_id} · <span class="customer-link" onclick="openCustomerProfile('${top.customer_id}')">${top.customer_id}</span>`;
+  document.getElementById("intel-expected").textContent = fmtCurrency(top.expected_recovery_value);
+  document.getElementById("intel-prob").textContent = `${Math.round(probability*100)}%`;
+  document.getElementById("intel-prob-fill").style.width = `${Math.round(probability*100)}%`;
+  document.getElementById("intel-detail").textContent =
+    `${profile.customer_value_segment || 'new-or-uncertain'} customer · ${Math.round((profile.historical_success_rate || 0)*100)}% historical success · ${top.failure_category || top.failure_reason || 'unknown'} · priority ${top.recovery_priority_score}`;
+
+  document.getElementById("intel-opps").innerHTML = opps.slice(0,5).map(o => `
+    <tr onclick="openAudit('${o.transaction_id}')" style="cursor:pointer">
+      <td class="txnid">${o.transaction_id}</td>
+      <td>${fmtCurrency(o.amount)}</td>
+      <td>${Math.round(Number(o.recovery_probability || 0)*100)}%</td>
+      <td>${fmtCurrency(o.expected_recovery_value)}</td>
+    </tr>`).join("");
+}
+
+function renderBreakdown(elId, obj){
+  const el = document.getElementById(elId);
+  el.innerHTML = "";
+  const entries = Object.entries(obj || {}).sort((a,b)=>b[1]-a[1]);
+  if(entries.length === 0){
+    el.innerHTML = `<div class="hint">No data yet</div>`;
+    return;
+  }
+  const max = Math.max(...entries.map(e=>e[1]));
+  entries.forEach(([label, count])=>{
+    const pct = Math.max(6, Math.round((count/max)*100));
+    el.innerHTML += `
+      <div class="bar-row">
+        <div class="bar-label">${label ? label.replace(/_/g,' ') : 'unknown'}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <div class="bar-count">${count}</div>
+      </div>`;
+  });
+}
+
+async function loadTransactions(){
+  const res = await fetch(API + "/transactions?limit=500");
+  const d = await res.json();
+  allTransactions = d.transactions;
+  renderTable();
+}
+
+function renderTable(){
+  const tbody = document.getElementById("txnTableBody");
+  const filtered = currentFilter
+    ? allTransactions.filter(t => t.status === currentFilter)
+    : allTransactions;
+
+  document.getElementById("txnCountHint").textContent = `${filtered.length} rows`;
+  document.getElementById("emptyHint").style.display = filtered.length ? "none" : "block";
+
+  tbody.innerHTML = filtered.map(t => `
+    <tr onclick="openAudit('${t.transaction_id}')">
+      <td class="txnid">${t.transaction_id}</td>
+      <td class="customer-link" onclick="event.stopPropagation(); openCustomerProfile('${t.customer_id}')">${t.customer_id}</td>
+      <td>${t.merchant_id}</td>
+      <td class="mono">${t.payment_method}</td>
+      <td>${pillHtml(t.status)}</td>
+      <td class="hint">${t.failure_reason ? t.failure_reason.replace(/_/g,' ') : '—'}</td>
+      <td class="amount">${fmtCurrency(t.amount)}</td>
+    </tr>
+  `).join("");
+}
+
+document.getElementById("filterControls").addEventListener("click", (e)=>{
+  if(e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#filterControls button").forEach(b=>b.classList.remove("active"));
+  e.target.classList.add("active");
+  currentFilter = e.target.dataset.filter;
+  renderTable();
+});
+
+async function openAudit(txnId){
+  const res = await fetch(API + "/audit/" + txnId);
+  const d = await res.json();
+  document.getElementById("drawerTitle").textContent = d.transaction.transaction_id;
+  document.getElementById("drawerSub").innerHTML =
+    `${d.transaction.merchant_id} · <span class="customer-link" onclick="openCustomerProfile('${d.transaction.customer_id}')">${d.transaction.customer_id}</span> · ${fmtCurrency(d.transaction.amount)} · ${d.transaction.status}`;
+
+  let recoveryHtml = "";
+  if(d.transaction.status === "failed" || d.transaction.status === "pending"){
+    try{
+      const rres = await fetch(API + "/recovery-probability/" + txnId);
+      const rd = await rres.json();
+      if(rd.applicable){
+        const pct = Math.round((rd.recovery_probability || 0) * 100);
+        const reasonCat = rd.probability_factors && rd.probability_factors.diagnosis_category
+          ? rd.probability_factors.diagnosis_category.replace(/_/g,' ') : '—';
+        recoveryHtml = `
+          <div class="intel-card recovery-callout">
+            <div class="hint">Recovery possibility for this ${fmtCurrency(rd.amount)} payment</div>
+            <div class="intel-value">${pct}%</div>
+            <div class="prob-bar"><div class="prob-fill" style="width:${pct}%"></div></div>
+            <div class="intel-sub">Expected recoverable amount: ${fmtCurrency(rd.expected_recovery_value)} · likely cause: ${reasonCat}</div>
+          </div>`;
+      }
+    } catch(err){ /* non-fatal, drawer still shows the audit trail */ }
+  }
+
+  let trailHtml = "";
+  if(d.audit_trail.length === 0){
+    trailHtml = `<div class="hint">No recovery actions have been run on this transaction yet.</div>`;
+  } else {
+    trailHtml = d.audit_trail.map(a => `
+      <div class="trail-item">
+        <div class="step-label">${a.step}${a.action_type ? ' → ' + a.action_type : ''}</div>
+        <div class="step-detail">${a.reasoning || ''}</div>
+        ${a.confidence_score !== null && a.confidence_score !== undefined ? `<div class="step-time">confidence: ${a.confidence_score}</div>` : ''}
+        <div class="step-time">${a.performed_at ? new Date(a.performed_at).toLocaleString() : ''} · ${a.performed_by}</div>
+      </div>
+    `).join("");
+  }
+
+  let outcomesHtml = "";
+  if(d.outcomes.length){
+    outcomesHtml = `<div class="hint" style="margin:16px 0 8px;">Outcomes</div>`;
+    outcomesHtml += d.outcomes.map(o => `
+      <div class="trail-item">
+        <div class="step-label">${o.outcome}</div>
+        <div class="step-detail">${o.notes || ''}${o.amount_recovered ? ' — ' + fmtCurrency(o.amount_recovered) + ' recovered' : ''}</div>
+        <div class="step-time">${o.recorded_at ? new Date(o.recorded_at).toLocaleString() : ''}</div>
+      </div>
+    `).join("");
+  }
+
+  document.getElementById("drawerContent").innerHTML = recoveryHtml + trailHtml + outcomesHtml;
+  document.getElementById("drawerBackdrop").classList.add("open");
+}
+
+document.getElementById("closeDrawer").addEventListener("click", ()=>{
+  document.getElementById("drawerBackdrop").classList.remove("open");
+});
+document.getElementById("drawerBackdrop").addEventListener("click", (e)=>{
+  if(e.target.id === "drawerBackdrop") e.target.classList.remove("open");
+});
+
+/* ---- Customer profile drawer ---- */
+let currentProfileCustomer = null;
+let currentProfileFilter = "";
+
+async function openCustomerProfile(customerId){
+  document.getElementById("drawerBackdrop").classList.remove("open");
+  currentProfileCustomer = customerId;
+  currentProfileFilter = "";
+
+  const res = await fetch(API + "/customer-profile/" + encodeURIComponent(customerId));
+  if(!res.ok){
+    showBanner("No profile found for " + customerId);
+    return;
+  }
+  const p = await res.json();
+
+  document.getElementById("profileTitle").textContent = customerId;
+  document.getElementById("profileSub").textContent =
+    `${(p.customer_value_segment || 'new-or-uncertain').replace(/-/g,' ')} · ${Math.round((p.historical_success_rate||0)*100)}% historical success rate · avg ticket ${fmtCurrency(p.average_transaction_value)}`;
+
+  renderProfileStats(p);
+  document.getElementById("profileBackdrop").classList.add("open");
+  await loadProfileTransactions();
+}
+
+function renderProfileStats(p){
+  const stats = [
+    { key: "",          label: "Total",     value: p.total_transactions || 0 },
+    { key: "success",   label: "Success",   value: p.successful_transactions || 0 },
+    { key: "pending",   label: "Pending",   value: p.pending_transactions || 0 },
+    { key: "failed",    label: "Failed",    value: p.failed_transactions || 0 },
+    { key: "recovered", label: "Recovered", value: p.recovered_transactions || 0 },
+    { key: "escalated", label: "Escalated", value: p.escalated_transactions || 0 },
+  ];
+  document.getElementById("profileStats").innerHTML = stats.map(s => `
+    <div class="stat-chip ${s.key === currentProfileFilter ? 'active' : ''}" data-key="${s.key}" onclick="filterProfileTransactions('${s.key}')">
+      <div class="num mono">${s.value}</div>
+      <div class="lbl">${s.label}</div>
+    </div>`).join("");
+}
+
+async function filterProfileTransactions(key){
+  currentProfileFilter = key;
+  document.querySelectorAll("#profileStats .stat-chip").forEach(c=>{
+    c.classList.toggle("active", c.dataset.key === key);
+  });
+  await loadProfileTransactions();
+}
+
+async function loadProfileTransactions(){
+  let url = API + "/transactions?customer_id=" + encodeURIComponent(currentProfileCustomer) + "&limit=500";
+  if(currentProfileFilter) url += "&status=" + currentProfileFilter;
+  const res = await fetch(url);
+  const d = await res.json();
+  const txns = d.transactions || [];
+
+  document.getElementById("profileFilterLabel").textContent = currentProfileFilter ? `— ${currentProfileFilter}` : "— all";
+  document.getElementById("profileEmptyHint").style.display = txns.length ? "none" : "block";
+  document.getElementById("profileTxnBody").innerHTML = txns.map(t => `
+    <tr onclick="openCustomerAndAudit('${t.transaction_id}')" style="cursor:pointer">
+      <td class="txnid">${t.transaction_id}</td>
+      <td>${pillHtml(t.status)}</td>
+      <td class="amount">${fmtCurrency(t.amount)}</td>
+    </tr>`).join("");
+}
+
+function openCustomerAndAudit(txnId){
+  document.getElementById("profileBackdrop").classList.remove("open");
+  openAudit(txnId);
+}
+
+document.getElementById("closeProfile").addEventListener("click", ()=>{
+  document.getElementById("profileBackdrop").classList.remove("open");
+});
+document.getElementById("profileBackdrop").addEventListener("click", (e)=>{
+  if(e.target.id === "profileBackdrop") e.target.classList.remove("open");
+});
+
+document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+
+document.getElementById("recoverAllBtn").addEventListener("click", async (e)=>{
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Recovering…";
+  try{
+    const res = await fetch(API + "/batch-recover", { method: "POST" });
+    const d = await res.json();
+    showBanner(`Processed ${d.processed} transactions — ${fmtCurrency(d.total_recovered_amount)} recovered`);
+    await refreshAll();
+  } catch(err){
+    showBanner("Batch recovery failed — check server logs");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Recover all eligible";
+  }
+});
+
+function showBanner(msg){
+  const b = document.getElementById("statusBanner");
+  b.textContent = msg;
+  b.classList.add("show");
+  setTimeout(()=>b.classList.remove("show"), 4000);
+}
+
+async function refreshAll(){
+  await Promise.all([loadDashboard(), loadTransactions()]);
+}
+
+refreshAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+======================================================================
+AI REVENUE RECOVERY AGENT — SAMPLE RUN
+======================================================================
+
+[1] Generating 200 synthetic transactions...
+Generated 200 transactions:
+  success : 135
+  failed  : 45
+  pending : 20
+Ground-truth labels for 45 failed transactions written to data/labels.json
+
+[2] Running detection engine...
+    -> 36 recovery opportunities found
+    -> top 3 by priority:
+       txn_00072 | abandoned_checkout | Rs.23563.21 | score=30632.17
+       txn_00037 | abandoned_checkout | Rs.21991.76 | score=30018.75
+       txn_00006 | at_risk_failed | Rs.22502.75 | score=24753.03
+
+[3] Sample diagnoses (first 5 opportunities)...
+    txn_00072: category=abandoned_checkout     confidence=0.75 -> suggested=discount_offer [rule_based]
+    txn_00037: category=abandoned_checkout     confidence=0.75 -> suggested=discount_offer [rule_based]
+    txn_00006: category=expired_card           confidence=0.70 -> suggested=email_reminder [rule_based]
+    txn_00170: category=abandoned_checkout     confidence=0.75 -> suggested=discount_offer [rule_based]
+    txn_00034: category=abandoned_checkout     confidence=0.75 -> suggested=discount_offer [rule_based]
+
+[4] Running batch recovery on all opportunities...
+    -> processed 36 transactions
+    -> recovered:    16
+    -> escalated:    6
+    -> still failed: 14
+    -> TOTAL MONEY RECOVERED: Rs.70,413.01
+
+[5] Dashboard metrics after batch recovery...
+{
+  "total_transactions": 200,
+  "status_counts": {
+    "escalated": 6,
+    "failed": 35,
+    "pending": 8,
+    "recovered": 16,
+    "success": 135
+  },
+  "failed_count": 35,
+  "pending_count": 8,
+  "recovered_count": 16,
+  "escalated_count": 6,
+  "success_count": 135,
+  "total_money_recovered": 70413.01,
+  "failure_breakdown": {
+    "bank_decline": 7,
+    "expired_card": 6,
+    "insufficient_balance": 14,
+    "mandate_expired": 7,
+    "network_timeout": 5,
+    "technical_error": 6
+  },
+  "intervention_breakdown": {
+    "discount_offer": 16,
+    "email_reminder": 6,
+    "escalate": 6,
+    "retry": 8
+  },
+  "outcome_breakdown": {
+    "escalated": 6,
+    "recovered": 16,
+    "still_failed": 14
+  }
+}
+
+[6] Sample audit trail for one recovered transaction...
+{
+  "transaction": {
+    "transaction_id": "txn_00006",
+    "merchant_id": "merch_005",
+    "customer_id": "cust_0058",
+    "amount": 22502.75,
+    "status": "recovered",
+    "failure_reason": "expired_card",
+    "retry_count": 2,
+    "max_retries": 3
+  },
+  "audit_trail": [
+    {
+      "step": "detection",
+      "action_type": null,
+      "failure_category": null,
+      "confidence_score": null,
+      "reasoning": "failed payment within recovery window",
+      "performed_at": "2026-08-28T05:08:50.502031",
+      "performed_by": "ai_agent"
+    },
+    {
+      "step": "diagnosis",
+      "action_type": null,
+      "failure_category": "expired_card",
+      "confidence_score": 0.7,
+      "reasoning": "[rule_based] Processor reported 'expired_card' as the decline reason for a card payment.",
+      "performed_at": "2026-08-28T05:08:50.502033",
+      "performed_by": "ai_agent"
+    },
+    {
+      "step": "intervention",
+      "action_type": "email_reminder",
+      "failure_category": null,
+      "confidence_score": null,
+      "reasoning": "Selected 'email_reminder' (diagnosis suggested 'email_reminder')",
+      "performed_at": "2026-08-28T05:08:50.502033",
+      "performed_by": "ai_agent"
+    }
+  ],
+  "outcomes": [
+    {
+      "outcome": "recovered",
+      "amount_recovered": 22502.75,
+      "intervention_used": "email_reminder",
+      "recorded_at": "2026-08-28T05:08:50.502270",
+      "notes": "Customer completed payment after 'email_reminder' intervention."
+    }
+  ]
+}
+
+======================================================================
+SAMPLE RUN COMPLETE
+======================================================================
